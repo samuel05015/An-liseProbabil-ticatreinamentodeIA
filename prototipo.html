@@ -1,0 +1,515 @@
+<!doctype html>
+<!--
+  EntreAtos é um protótipo offline contido neste arquivo.
+  O CSS estiliza a página, o HTML define a interface e os dois scripts
+  cuidam do modelo e da interação com a tela, respectivamente.
+
+  Na apresentação, procure por function avaliar para mostrar onde o código
+  compara a decisão do modelo com o gabarito dos 32 relatos de teste.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>EntreAtos · Triagem de figurinos</title>
+<style>
+  /* Cores e fonte usadas em toda a interface. */
+  :root {
+    --paper: #f8f3e9;
+    --surface: #fffdf8;
+    --ink: #2d2321;
+    --muted: #685751;
+    --wine: #612237;
+    --wine-dark: #461727;
+    --gold: #f7cb82;
+    --line: #e0d3c6;
+    --soft: #f4e9e9;
+    --green: #2f583e;
+    --green-light: #e8f0e6;
+    --amber: #754516;
+    --amber-light: #fbecd4;
+    font: 16px/1.5 system-ui, sans-serif;
+  }
+  /* Estrutura da página, cabeçalho e hierarquia dos títulos. */
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); }
+  .wrap { width: min(100% - 2rem, 69rem); margin-inline: auto; }
+  header { background: var(--wine-dark); color: var(--paper); border-bottom: 4px solid var(--gold); padding: 2.3rem 0 2.5rem; }
+  header p { margin: .35rem 0 0; max-width: 44rem; }
+  .eyebrow, .overline { font-size: .76rem; text-transform: uppercase; letter-spacing: .12em; font-weight: 750; }
+  .eyebrow { color: var(--gold); }
+  h1, h2, .serif { font-family: Georgia, serif; font-weight: 600; line-height: 1.1; }
+  h1 { font-size: clamp(3rem, 7vw, 5rem); margin: .35rem 0 .6rem; letter-spacing: -.035em; }
+  h2 { font-size: clamp(1.7rem, 4vw, 2.1rem); margin: 0 0 .6rem; }
+  h3 { font-size: 1rem; margin: 1.15rem 0 .45rem; }
+  main { padding-block: 1.75rem 3rem; }
+  /* Formulário e resultado lado a lado em telas largas. */
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; padding: clamp(1.05rem, 3vw, 1.65rem); }
+  .note, .field-help { color: var(--muted); margin: .55rem 0 0; }
+  .field-help { display: block; font-size: .88rem; }
+  label { display: block; font-weight: 700; margin: 1.15rem 0 .4rem; }
+  textarea { display: block; width: 100%; min-height: 6.6rem; resize: vertical; border: 1px solid #a9918c; border-radius: .55rem; background: #fff; color: inherit; padding: .75rem; font: inherit; }
+  /* Foco visível para quem navega pelo teclado e variações dos botões. */
+  :focus-visible { outline: 3px solid #8c4f18; outline-offset: 3px; }
+  .actions, .samples { display: flex; flex-wrap: wrap; gap: .55rem; }
+  .actions { margin-top: 1rem; }
+  button { min-height: 2.65rem; border: 1px solid transparent; border-radius: .55rem; padding: .53rem .85rem; font: inherit; font-weight: 700; cursor: pointer; }
+  .primary { color: white; background: var(--wine); }
+  .primary:hover { background: var(--wine-dark); }
+  .secondary { color: var(--wine-dark); background: var(--paper); border-color: var(--line); }
+  .secondary:hover { background: var(--soft); }
+  .samples button { font-size: .86rem; }
+  /* Estados controlados pelo JavaScript, incluindo erro e revisão humana. */
+  [hidden] { display: none !important; }
+  #erro { color: #8d202c; margin: .5rem 0 0; font-weight: 650; }
+  .result-box { border-left: .25rem solid var(--green); padding: .8rem 1rem; margin-top: 1.1rem; background: var(--green-light); color: var(--green); border-radius: .3rem; }
+  .result-box.review { background: var(--amber-light); color: var(--amber); border-color: var(--amber); }
+  .result-box p { margin: 0; }
+  #destino { font-size: 1.55rem; margin: .22rem 0 .34rem; }
+  /* Barras de pontuação e lista de palavras reconhecidas. */
+  .scores { list-style: none; margin: .2rem 0 .65rem; padding: 0; }
+  .score { display: grid; grid-template-columns: 7.35rem minmax(2rem, 1fr) 3rem; gap: .6rem; align-items: center; margin: .4rem 0; font-size: .9rem; }
+  .score span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  progress { appearance: none; border: 0; width: 100%; height: .53rem; border-radius: 999px; overflow: hidden; background: var(--soft); }
+  progress::-webkit-progress-bar { background: var(--soft); }
+  progress::-webkit-progress-value { background: var(--wine); }
+  progress::-moz-progress-bar { background: var(--wine); }
+  #palavras { font-size: .89rem; overflow-wrap: anywhere; }
+  /* Área de avaliação com indicadores e tabela. As divergências ganham destaque. */
+  details.panel { margin-top: 1.25rem; }
+  summary { cursor: pointer; color: var(--wine-dark); font-weight: 750; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: .7rem; margin-block: 1rem; }
+  .metric { margin: 0; padding: .75rem .85rem; background: var(--paper); border: 1px solid var(--line); border-radius: .55rem; }
+  .metric strong { display: block; font-size: 1.4rem; color: var(--wine); }
+  .metric span { display: block; font-size: .84rem; }
+  .table-wrap { overflow: auto; max-height: 26rem; }
+  table { width: 100%; border-collapse: collapse; text-align: left; font-size: .88rem; }
+  th, td { padding: .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { background: var(--paper); position: sticky; top: 0; }
+  .mismatch { color: var(--amber); }
+  /* No celular, os dois painéis ficam empilhados. */
+  @media (max-width: 48rem) {
+    .columns { grid-template-columns: 1fr; }
+    header { padding-block: 1.6rem; }
+    main { padding-top: 1rem; }
+  }
+</style>
+</head>
+<body>
+<!-- Título e contexto da ferramenta. -->
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Teatro escolar · Pós-ensaio</p>
+    <h1>EntreAtos</h1>
+    <p>Triagem de ocorrências nos figurinos da próxima sessão.</p>
+  </div>
+</header>
+<main class="wrap">
+  <noscript><p>Ative o JavaScript do navegador para executar o protótipo.</p></noscript>
+  <div class="columns">
+    <!-- Entrada do relato. O script da interface insere os botões de exemplo. -->
+    <section class="panel" aria-labelledby="entrada-titulo">
+      <h2 id="entrada-titulo">Relato do figurino</h2>
+      <p class="note">Descreva o que aconteceu com a peça na devolução após o ensaio.</p>
+      <form id="triagem" novalidate>
+        <label for="relato">O que aconteceu?</label>
+        <textarea id="relato" maxlength="360" aria-describedby="orientacao erro" placeholder="Ex.: O zíper da capa travou e a barra descosturou."></textarea>
+        <span class="field-help" id="orientacao">Até 360 caracteres. Use apenas informações sobre a peça.</span>
+        <p id="erro" role="alert" hidden>Escreva um relato ou escolha um exemplo abaixo.</p>
+        <div class="actions">
+          <button class="primary" type="submit">Classificar relato</button>
+          <button class="secondary" type="reset">Limpar</button>
+        </div>
+      </form>
+      <h3>Exemplos para testar</h3>
+      <div class="samples" id="exemplos"></div>
+    </section>
+    <!-- Destino, motivo, escores por categoria e palavras que entraram no cálculo. -->
+    <section class="panel" aria-labelledby="resultado-titulo">
+      <h2 id="resultado-titulo">Encaminhamento</h2>
+      <div role="status" aria-live="polite">
+        <p class="note" id="aguardando">O resultado aparece aqui depois da classificação.</p>
+        <div class="result-box" id="resultado" hidden>
+          <p class="overline">Destino sugerido</p>
+          <p class="serif" id="destino"></p>
+          <p id="motivo"></p>
+        </div>
+      </div>
+      <div id="evidencia" hidden>
+        <h3>Pontuação do modelo</h3>
+        <ul id="pontuacoes" class="scores"></ul>
+        <p class="note" id="palavras"></p>
+      </div>
+    </section>
+  </div>
+  <!-- Experimento reproduzível com gabarito e previsão lado a lado. -->
+  <details class="panel" id="avaliacao">
+    <summary>Avaliação com relatos simulados</summary>
+    <p class="note" id="metodo"></p>
+    <div class="actions"><button class="secondary" type="button" id="avaliar">Rodar avaliação</button></div>
+    <div id="resultados-avaliacao" hidden>
+      <div class="metrics" id="metricas"></div>
+      <details>
+        <summary>Ver previsões por relato</summary>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Previsões por relato">
+          <table>
+            <thead><tr><th scope="col">Relato</th><th scope="col">Esperado</th><th scope="col">Primeira classe</th><th scope="col">Decisão final</th></tr></thead>
+            <tbody id="linhas"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </details>
+</main>
+
+<!-- Modelo e dados. Estas funções fazem os cálculos sem depender da tela. -->
+<script id="modelo">
+'use strict';
+
+// As três classes aprendidas pelo modelo, com rótulos e orientações para a tela.
+// A revisão humana é decidida por uma regra e fica fora do treinamento.
+const classes = {
+  conserto: { nome: 'Conserto', motivo: 'Separe a peça para a equipe de costura verificar o reparo.' },
+  limpeza: { nome: 'Limpeza', motivo: 'Separe a peça para a equipe responsável pela higienização.' },
+  acervo: { nome: 'Acervo', motivo: 'Peça à equipe do acervo que confira o registro, a identificação ou a localização.' }
+};
+// Converte a chave interna do resultado no nome que aparece na interface.
+const nomeClasse = chave => classes[chave]?.nome ?? 'Revisão humana';
+
+// 1. Base de treinamento. Os 60 relatos são simulados, com 20 por classe.
+// A chave de cada grupo indica o rótulo que o modelo deve aprender.
+const treino = {
+  conserto: [
+    'O zíper travou na metade e precisa de ajuste.',
+    'Os pontos da barra descosturaram durante a troca.',
+    'A costura abriu no ombro do colete.',
+    'O botão soltou e o casaco ficou sem fechar.',
+    'A manga rasgou na lateral perto da costura.',
+    'O elástico da calça arrebentou e ficou frouxo.',
+    'A bainha desfez e está arrastando no chão.',
+    'A fivela quebrou e a correia ficou solta.',
+    'A alça partiu e precisa ser costurada de novo.',
+    'O velcro soltou do tecido e o fecho abriu.',
+    'O zíper perdeu o cursor e não fecha mais.',
+    'A barra ficou descosturada em dois pontos.',
+    'O gancho do colchete entortou e não encaixa.',
+    'Rasgo na manga do vestido próximo da axila.',
+    'A linha da costura rompeu perto do bolso.',
+    'O botão enroscou e rasgou a casa de botão.',
+    'A saia ficou com a bainha solta e precisa de pontos.',
+    'O ajuste do punho precisa de um novo elástico.',
+    'A presilha da capa quebrou perto da gola.',
+    'O tecido abriu na emenda do forro e pede reparo.'
+  ],
+  limpeza: [
+    'O avental voltou com mancha de maquiagem.',
+    'A camisa ficou com cheiro forte de suor.',
+    'O tecido tem poeira e precisa de higienização.',
+    'A saia está com barro seco na barra.',
+    'Tem uma mancha de tinta na manga da blusa.',
+    'A capa molhou e precisa secar antes de guardar.',
+    'O colete está com odor de mofo e umidade.',
+    'Caiu café no bolso do casaco e deixou uma mancha.',
+    'O vestido ficou úmido e com mau cheiro.',
+    'Tem resíduo de pó de maquiagem na gola.',
+    'A camisa está suada e precisa ir para a lavagem.',
+    'O forro ficou encardido depois do uso.',
+    'A calça ficou com resíduo de cola no tecido.',
+    'O lenço voltou sujo de maquiagem e tinta.',
+    'Manchas de comida no avental pedem lavagem.',
+    'A gola está amarelada e tem cheiro ruim.',
+    'O punho voltou sujo de terra e poeira.',
+    'O figurino chegou molhado de chuva.',
+    'Tem farelos no tecido e uma mancha de gordura.',
+    'O chapéu está com cheiro de mofo.'
+  ],
+  acervo: [
+    'A etiqueta do acervo sumiu e o código ficou ilegível.',
+    'O chapéu não está na caixa indicada no inventário.',
+    'Tem duas capas cadastradas com o mesmo número.',
+    'A ficha de devolução registra uma peça que ficou faltando.',
+    'O figurino voltou para a arara errada do depósito.',
+    'A planilha diz que o lenço foi devolvido, mas ele não apareceu.',
+    'O código da etiqueta não confere com o cadastro.',
+    'O conjunto foi guardado no armário errado e precisa de localização.',
+    'O cinto sumiu no caminho entre a arara e a caixa.',
+    'A ficha de empréstimo está sem registro de devolução.',
+    'A identificação do colete está ilegível na etiqueta.',
+    'A pasta do acervo tem uma baixa duplicada no inventário.',
+    'Há um colete a menos no lote devolvido.',
+    'A localização anotada no cadastro aponta para a prateleira errada.',
+    'A lista de conferência indica que o chapéu está faltando.',
+    'A entrega da capa foi registrada com outro código.',
+    'A planilha do depósito mantém uma peça com número repetido.',
+    'A caixa de transporte voltou sem o lenço listado.',
+    'Encontraram uma saia na arara, mas ela está sem identificação.',
+    'O empréstimo da jaqueta foi lançado na ficha do colete.'
+  ]
+};
+
+// 2. Base de teste. Cada linha guarda [gabarito, relato].
+// São 24 casos com destino principal e 8 casos previstos para revisão.
+// Estes relatos simulados ficam fora do treino para medir o desempenho em textos novos.
+const teste = [
+  // Oito relatos cujo destino esperado é conserto.
+  ['conserto', 'O zíper da capa travou e a barra descosturou.'],
+  ['conserto', 'A fivela quebrou e o botão soltou no corredor.'],
+  ['conserto', 'A costura da manga abriu perto do ombro.'],
+  ['conserto', 'O cursor saiu do zíper e o casaco ficou aberto.'],
+  ['conserto', 'O punho perdeu o elástico e ficou frouxo.'],
+  ['conserto', 'O velcro está solto e a presilha não encaixa.'],
+  ['conserto', 'A roupa descambou na lateral, o pano abriu todo.'],
+  ['conserto', 'A camisa está suada, mas a ocorrência é o rasgo na manga.'],
+  // Oito relatos cujo destino esperado é limpeza.
+  ['limpeza', 'O colete voltou com mancha de café e cheiro de mofo.'],
+  ['limpeza', 'A bainha da saia ficou com barro e poeira.'],
+  ['limpeza', 'A gola ficou com pó de maquiagem e pede lavagem.'],
+  ['limpeza', 'O casaco pegou chuva e está molhado por dentro.'],
+  ['limpeza', 'Sentiram um odor forte de suor na camisa.'],
+  ['limpeza', 'A capa ficou com marcas de caneta no tecido.'],
+  ['limpeza', 'O forro ficou úmido e com cheiro ruim.'],
+  ['limpeza', 'A manga tem manchas de gordura e resíduo de comida.'],
+  // Oito relatos cujo destino esperado é acervo.
+  ['acervo', 'A etiqueta do colete tem um código que não bate com a planilha.'],
+  ['acervo', 'A lista indica três capas, mas faltou uma na devolução.'],
+  ['acervo', 'O chapéu sumiu da caixa apontada pelo cadastro.'],
+  ['acervo', 'A saia ficou na prateleira errada do depósito.'],
+  ['acervo', 'Tem cadastro repetido para o mesmo número de jaqueta.'],
+  ['acervo', 'O empréstimo do lenço ficou sem registro na ficha.'],
+  ['acervo', 'A devolução foi anotada e ninguém encontra o adereço.'],
+  ['acervo', 'O conjunto veio solto, sem etiqueta e sem identificação.'],
+  // Oito relatos vagos, fora de escopo ou com mais de um problema.
+  ['revisao', 'Deu algum problema com o figurino.'],
+  ['revisao', 'O zíper travou e a manga está com mancha de café.'],
+  ['revisao', 'A capa voltou assim.'],
+  ['revisao', 'Consegue reservar a sala para amanhã?'],
+  ['revisao', 'A etiqueta está ilegível e a fivela quebrou.'],
+  ['revisao', 'A costura abriu e o zíper travou, mas a gola também tem uma pequena mancha.'],
+  ['revisao', 'Tem que olhar isso aqui.'],
+  ['revisao', 'O tecido precisa de atenção.']
+];
+
+// 3. Preparação do texto. Esta lista remove palavras comuns da língua e do cenário.
+const ignoradas = new Set(normalizar('a algum algumas ao aos aquela aquele aqui as até com como da das de dela dele depois do dos e ela ele em ensaio entre era essa esse está estamos este eu foi ficou figurino figurinos haver isso isto já lá mais mas me mesmo meu minha muito na nas nem no nos o onde os ou para pela pelas pelo pelos pois por porque que roupa roupas peça peças se seu sua só tem ter todo toda um uma umas uns voltou').split(' '));
+// Requisitos para encaminhar automaticamente. O escore 0,68 aparece como 68% na tela.
+const limites = { termos: 2, pontuacao: 0.68 };
+
+// Coloca maiúsculas e acentos na mesma forma de comparação. “Zíper” vira “ziper”.
+function normalizar(texto) {
+  return texto.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+// Extrai palavras e remove as de uma letra e as da lista de termos comuns.
+function tokenizar(texto) {
+  return (normalizar(texto).match(/[a-z]+/g) ?? [])
+    .filter(palavra => palavra.length > 1 && !ignoradas.has(palavra));
+}
+
+// 4. Treinamento. O modelo aprende quantas vezes cada palavra ocorre em cada classe.
+// Guarda o vocabulário global, as contagens por classe e os totais usados nas probabilidades.
+function treinar(exemplos) {
+  const vocabulario = new Set();
+  const categorias = Object.entries(exemplos).map(([chave, relatos]) => {
+    const frequencias = new Map();
+    let totalTermos = 0;
+    for (const relato of relatos) {
+      for (const palavra of tokenizar(relato)) {
+        // O conjunto guarda cada palavra uma vez. O mapa conta todas as ocorrências.
+        vocabulario.add(palavra);
+        frequencias.set(palavra, (frequencias.get(palavra) ?? 0) + 1);
+        totalTermos++;
+      }
+    }
+    return { chave, frequencias, totalTermos, documentos: relatos.length };
+  });
+  const totalDocumentos = categorias.reduce((total, categoria) => total + categoria.documentos, 0);
+  return { vocabulario, categorias, totalDocumentos };
+}
+
+// 5. Classificação. O Naive Bayes atribui um escore a cada classe com base no texto.
+function classificar(modelo, texto) {
+  // Mantém as repetições no cálculo. A regra de revisão usa apenas os termos distintos.
+  const tokens = tokenizar(texto).filter(palavra => modelo.vocabulario.has(palavra));
+  const termos = [...new Set(tokens)];
+  // Calcula os escores e ordena da classe mais pontuada para a menos pontuada.
+  const pontuacoes = modelo.categorias.map(({ chave, frequencias, totalTermos, documentos }) => {
+    // Começa pela proporção de relatos da classe no treino. O log permite somar as evidências.
+    let log = Math.log(documentos / modelo.totalDocumentos);
+    // A suavização de Laplace soma 1 à contagem de cada palavra do vocabulário.
+    // Isso evita zerar o escore quando uma palavra conhecida nunca apareceu nesta classe.
+    const denominador = totalTermos + modelo.vocabulario.size;
+    for (const termo of tokens) {
+      log += Math.log(((frequencias.get(termo) ?? 0) + 1) / denominador);
+    }
+    return { chave, log };
+  }).sort((a, b) => b.log - a.log);
+
+  // Converte os logaritmos em escores que somam 100%. Subtrair o maior log antes
+  // da exponencial evita valores muito pequenos. Os escores são internos ao modelo.
+  const maximo = pontuacoes[0].log;
+  const pesos = pontuacoes.map(item => Math.exp(item.log - maximo));
+  const soma = pesos.reduce((total, peso) => total + peso, 0);
+  const ranking = pontuacoes.map((item, i) => ({ chave: item.chave, valor: pesos[i] / soma }));
+
+  // Se o relato tem menos de duas palavras conhecidas ou a líder fica abaixo de 68%,
+  // a decisão final passa a ser revisão humana. O ranking continua disponível na tela.
+  let motivoRevisao = '';
+  if (termos.length < limites.termos) {
+    motivoRevisao = 'O modelo reconheceu poucas palavras. Confira o caso e acrescente detalhes ao relato.';
+  } else if (ranking[0].valor < limites.pontuacao) {
+    motivoRevisao = 'Nenhuma categoria alcançou o limite de 68%. A equipe deve conferir o relato.';
+  }
+  return { destino: motivoRevisao ? 'revisao' : ranking[0].chave, motivoRevisao, ranking, termos };
+}
+
+// 6. Avaliação. Aqui acontece a comparação das previsões com o gabarito.
+function avaliar(modelo, casos) {
+  // O modelo recebe só o relato. O gabarito fica ao lado da previsão para a conferência.
+  const linhas = casos.map(([esperado, relato]) => ({ esperado, relato, ...classificar(modelo, relato) }));
+  // Separa os grupos que servem de denominador para as métricas.
+  const simples = linhas.filter(linha => linha.esperado !== 'revisao');
+  const duvidosos = linhas.filter(linha => linha.esperado === 'revisao');
+  const automaticos = linhas.filter(linha => linha.destino !== 'revisao');
+  return {
+    linhas,
+    simples: simples.length,
+    // Mede a classe que liderou o ranking antes de aplicar a regra de revisão.
+    acertosPrimeira: simples.filter(linha => linha.ranking[0].chave === linha.esperado).length,
+    automaticos: automaticos.length,
+    // Entre os relatos aceitos para encaminhamento, conta os destinos corretos.
+    acertosAutomaticos: automaticos.filter(linha => linha.destino === linha.esperado).length,
+    revisados: linhas.length - automaticos.length,
+    revisoesEsperadas: duvidosos.length,
+    // Entre os relatos que pediam revisão no gabarito, conta os que foram sinalizados.
+    revisoesCorretas: duvidosos.filter(linha => linha.destino === 'revisao').length,
+    // Comparação geral. Acerta se a previsão (destino) for igual ao gabarito (esperado).
+    // Com os 32 relatos desta base, esta linha conta 28 decisões iguais ao gabarito.
+    acertosTotais: linhas.filter(linha => linha.destino === linha.esperado).length
+  };
+}
+</script>
+
+<!-- Interface. Este script liga o formulário e a área de avaliação às funções do modelo. -->
+<script>
+'use strict';
+
+// Treina uma vez ao abrir a página. Todos os cálculos ocorrem no próprio navegador.
+const modelo = treinar(treino);
+// Atalhos para localizar elementos da tela e formatar os escores em português.
+const obter = id => document.getElementById(id);
+const entrada = obter('relato');
+const percentagem = valor => valor.toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
+
+// Cria um elemento e insere conteúdo como texto, inclusive os relatos da tabela.
+function elemento(tag, texto) {
+  const no = document.createElement(tag);
+  no.textContent = texto;
+  return no;
+}
+
+// Volta ao estado inicial sempre que o relato muda ou o formulário é limpo.
+function limparResultado() {
+  obter('resultado').hidden = true;
+  obter('evidencia').hidden = true;
+  obter('aguardando').hidden = false;
+  obter('erro').hidden = true;
+  entrada.removeAttribute('aria-invalid');
+}
+
+// Classifica o relato e exibe a decisão com o motivo, os escores e os termos usados.
+function mostrarResultado(relato) {
+  const resultado = classificar(modelo, relato);
+  obter('resultado').classList.toggle('review', resultado.destino === 'revisao');
+  obter('destino').textContent = nomeClasse(resultado.destino);
+  obter('motivo').textContent = resultado.motivoRevisao || classes[resultado.destino].motivo;
+  // Troca as barras anteriores por uma barra para cada classe do ranking.
+  obter('pontuacoes').replaceChildren(...resultado.ranking.map(({ chave, valor }) => {
+    const linha = elemento('li', '');
+    linha.className = 'score';
+    const barra = elemento('progress', '');
+    barra.max = 1;
+    barra.value = valor;
+    barra.setAttribute('aria-label', `Pontuação para ${nomeClasse(chave)}`);
+    linha.append(elemento('span', nomeClasse(chave)), barra, elemento('span', percentagem(valor)));
+    return linha;
+  }));
+  obter('palavras').textContent = resultado.termos.length
+    ? `Palavras reconhecidas pelo modelo: ${resultado.termos.join(', ')}.`
+    : 'O modelo não reconheceu nenhuma palavra do relato.';
+  obter('aguardando').hidden = true;
+  obter('resultado').hidden = false;
+  obter('evidencia').hidden = false;
+}
+
+// Ao enviar o formulário, mantém a página aberta e verifica se o relato está vazio.
+obter('triagem').addEventListener('submit', evento => {
+  evento.preventDefault();
+  limparResultado();
+  const relato = entrada.value.trim();
+  if (!relato) {
+    obter('erro').hidden = false;
+    entrada.setAttribute('aria-invalid', 'true');
+    entrada.focus();
+    return;
+  }
+  mostrarResultado(relato);
+});
+// Evita mostrar um resultado antigo para um texto que acabou de ser alterado.
+obter('triagem').addEventListener('reset', limparResultado);
+entrada.addEventListener('input', limparResultado);
+
+// Os atalhos reproduzem quatro relatos da base de teste pelo fluxo normal do formulário.
+const exemplos = [
+  ['Zíper travado', teste[0][1]],
+  ['Mancha e odor', teste[8][1]],
+  ['Etiqueta divergente', teste[16][1]],
+  ['Relato vago', teste[24][1]]
+];
+for (const [rotulo, relato] of exemplos) {
+  const botao = elemento('button', rotulo);
+  botao.type = 'button';
+  botao.className = 'secondary';
+  botao.addEventListener('click', () => {
+    limparResultado();
+    entrada.value = relato;
+    obter('triagem').requestSubmit();
+  });
+  obter('exemplos').append(botao);
+}
+
+// Mostra a quantidade de relatos e os critérios usados no experimento.
+obter('metodo').textContent = `O navegador treina o Naive Bayes com ${modelo.totalDocumentos} relatos rotulados. A avaliação usa outros ${teste.length} relatos. A revisão entra quando há menos de dois termos conhecidos ou quando a maior pontuação fica abaixo de 68%. As pontuações são escores internos do modelo.`;
+
+// Ao clicar em “Rodar avaliação”, recalcula métricas e decisões para toda a base de teste.
+obter('avaliar').addEventListener('click', () => {
+  const dados = avaliar(modelo, teste);
+  const metricas = [
+    [dados.acertosPrimeira, dados.simples, 'Acertos da primeira classe nos casos com destino principal'],
+    [dados.automaticos, dados.linhas.length, 'Relatos encaminhados automaticamente'],
+    [dados.acertosAutomaticos, dados.automaticos, 'Acertos entre os encaminhados automaticamente'],
+    [dados.revisoesCorretas, dados.revisoesEsperadas, 'Casos previstos para revisão que foram sinalizados'],
+    [dados.acertosTotais, dados.linhas.length, 'Decisões finais iguais ao gabarito']
+  ];
+  obter('metricas').replaceChildren(...metricas.map(([n, d, rotulo]) => {
+    // Exibe numerador, denominador e porcentagem para mostrar o que foi contado.
+    const item = elemento('p', '');
+    item.className = 'metric';
+    item.append(elemento('strong', `${n}/${d} · ${d ? percentagem(n / d) : '—'}`), elemento('span', rotulo));
+    return item;
+  }));
+  // Mostra o gabarito, a classe líder e a decisão final. Destaca quando a decisão diverge.
+  obter('linhas').replaceChildren(...dados.linhas.map(linha => {
+    const item = elemento('tr', '');
+    const final = elemento('td', nomeClasse(linha.destino));
+    if (linha.destino !== linha.esperado) final.className = 'mismatch';
+    item.append(elemento('td', linha.relato), elemento('td', nomeClasse(linha.esperado)),
+      elemento('td', nomeClasse(linha.ranking[0].chave)), final);
+    return item;
+  }));
+  obter('resultados-avaliacao').hidden = false;
+});
+</script>
+</body>
+</html>
